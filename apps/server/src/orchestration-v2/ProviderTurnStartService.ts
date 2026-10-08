@@ -955,6 +955,13 @@ export const layer: Layer.Layer<
         text: message.text,
         records: message.context?.records ?? [],
       });
+      // The team brief rides with the message on every path, including turns with
+      // no handoff to deliver. Native slash commands (and so compaction) must stay
+      // at the start of the prompt.
+      const brief = userText.trimStart().startsWith("/")
+        ? undefined
+        : teamBrief(projection.thread.delegates ?? []);
+      const promptText = brief === undefined ? userText : `${brief}\n\n${userText}`;
       // Delivered once: this run's provider turn marks the work as told. A
       // restart continuation is prompted by its own text or resumes natively.
       const noteContinuation = isRestartNoteContinuation(
@@ -1172,14 +1179,7 @@ export const layer: Layer.Layer<
           });
           if (!(yield* isCurrentAttemptInStatus("running"))) return;
           const start = compact ? session.compactThread! : session.startTurn;
-          const context = [
-            // Native slash commands and compaction must stay at the start of the prompt.
-            compact || userText.trimStart().startsWith("/")
-              ? ""
-              : (teamBrief(turnInput.appThread.delegates ?? []) ?? ""),
-            delivery.context,
-            restartNote,
-          ]
+          const context = [delivery.context, restartNote]
             .filter((part) => part !== "")
             .join("\n\n");
           // A note continuation has no turn to resume; its text is the prompt.
@@ -1188,7 +1188,7 @@ export const layer: Layer.Layer<
             ...(noteContinuation ? promptedInput : turnInput),
             message: {
               ...turnInput.message,
-              text: context === "" ? userText : `${context}\n\nUser message:\n${userText}`,
+              text: context === "" ? promptText : `${context}\n\nUser message:\n${promptText}`,
             },
           }).pipe(
             // A pending marker would make the next turn abandon this native
@@ -1272,7 +1272,7 @@ export const layer: Layer.Layer<
         hasUnpairedRunInterruptRequest: runControls.hasUnpairedRunInterruptRequest,
         message: {
           messageId: message.id,
-          text: userText,
+          text: promptText,
           attachments: message.attachments,
           createdBy: message.createdBy,
           creationSource: message.creationSource,
