@@ -35,6 +35,7 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
   model: string;
   selectedModels?: ReadonlyArray<{ instanceId: ProviderInstanceId; model: string }>;
   onToggleModel?: (instanceId: ProviderInstanceId, model: string) => void;
+  multiSelectOnly?: boolean;
   lockedProvider: ProviderDriverKind | null;
   lockedContinuationGroupKey?: string | null;
   /** Instance entries rendered in the sidebar + used to resolve display name. */
@@ -300,6 +301,9 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
                   if (!props.disabled) props.onToggleModel?.(instanceId, model);
                 },
               }
+            : {})}
+          {...(props.multiSelectOnly !== undefined
+            ? { multiSelectOnly: props.multiSelectOnly }
             : {})}
           lockedProvider={props.lockedProvider}
           lockedContinuationGroupKey={props.lockedContinuationGroupKey ?? null}

@@ -1528,6 +1528,9 @@ export interface ChatComposerProps {
   onMultipleModelSelectionsChange: React.Dispatch<
     React.SetStateAction<ReadonlyArray<ModelSelection> | null>
   >;
+  /** Workers the brain may delegate to: the draft's picks, or the started thread's roster. */
+  workers?: ReadonlyArray<ModelSelection>;
+  onToggleWorker?: (instanceId: ProviderInstanceId, model: string) => void;
 
   // Thread context
   activeThreadId: ThreadId | null;
@@ -1719,6 +1722,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     multipleModelSelections,
     supportsMultipleModels,
     onMultipleModelSelectionsChange: setMultipleModelSelections,
+    workers,
+    onToggleWorker,
     activeThreadId,
     activeThreadEnvironmentId: _activeThreadEnvironmentId,
     activeThread,
@@ -5539,6 +5544,36 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         }}
         onOpenProviderSetup={onOpenProviderSetup}
       />
+      {/* Workers: who the brain above may hand work to. Unlike the brain, a worker
+          is not bound by the thread's provider lock, and the roster stays editable
+          after the thread starts. */}
+      {onToggleWorker ? (
+        <ProviderModelPicker
+          isComposerOwned
+          disabled={providerCatalogPending || isSendBusy}
+          triggerLabel={
+            (workers?.length ?? 0) === 0
+              ? "No workers"
+              : `${workers!.length} worker${workers!.length === 1 ? "" : "s"}`
+          }
+          triggerAriaLabel="Workers"
+          multiSelectOnly
+          selectedModels={workers ?? []}
+          onToggleModel={onToggleWorker}
+          lockedProvider={null}
+          lockedContinuationGroupKey={null}
+          activeInstanceId={selectedInstanceId}
+          model={selectedModelForPickerWithCustomFallback}
+          instanceEntries={providerInstanceEntries}
+          keybindings={keybindings}
+          modelOptionsByInstance={modelOptionsByInstance}
+          size={composerControlsCollapsed ? "xs" : "sm"}
+          terminalOpen={terminalOpen}
+          getModelDisabledReason={getModelDisabledReason}
+          onInstanceModelChange={onToggleWorker}
+          onOpenProviderSetup={onOpenProviderSetup}
+        />
+      ) : null}
 
       <>
         {restingBlockDefs.map((def, index) => {

@@ -150,6 +150,8 @@ interface StartThreadBootstrap {
     readonly interactionMode: ProviderInteractionMode;
     readonly branch: string | null;
     readonly worktreePath: string | null;
+    /** Workers the brain may delegate to; empty or absent places no limit. */
+    readonly delegates?: ReadonlyArray<ModelSelection>;
     readonly createdAt: string;
   };
   readonly prepareWorktree?: {
@@ -474,6 +476,20 @@ export const setThreadAutoSettle = Effect.fn("EnvironmentCommands.setThreadAutoS
   });
 });
 
+export interface SetThreadDelegatesInput extends ThreadCommandInput {
+  readonly delegates: ReadonlyArray<ModelSelection>;
+}
+export const setThreadDelegates = Effect.fn("EnvironmentCommands.setThreadDelegates")(function* (
+  input: SetThreadDelegatesInput,
+) {
+  return yield* dispatch({
+    type: "thread.delegates.set",
+    commandId: yield* allocateCommandId(input),
+    threadId: input.threadId,
+    delegates: input.delegates,
+  });
+});
+
 export const reorderPinnedThread = Effect.fn("EnvironmentCommands.reorderPinnedThread")(function* (
   input: ReorderPinnedThreadInput,
 ) {
@@ -676,6 +692,9 @@ export const startThreadTurn = Effect.fn("EnvironmentCommands.startThreadTurn")(
       modelSelection: input.modelSelection ?? thread.modelSelection,
       runtimeMode: input.runtimeMode,
       interactionMode: input.interactionMode,
+      ...(bootstrap?.delegates === undefined || bootstrap.delegates.length === 0
+        ? {}
+        : { delegates: bootstrap.delegates }),
       workspaceStrategy,
       initialMessage: {
         messageId: input.message.messageId,

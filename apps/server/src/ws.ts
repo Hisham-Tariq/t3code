@@ -1957,6 +1957,7 @@ const layerWsRpc = (
                     modelSelection: input.modelSelection,
                     runtimeMode: input.runtimeMode,
                     interactionMode: input.interactionMode,
+                    ...(input.delegates === undefined ? {} : { delegates: input.delegates }),
                     workspaceStrategy: input.workspaceStrategy,
                     ...(input.initialMessage === undefined
                       ? {}

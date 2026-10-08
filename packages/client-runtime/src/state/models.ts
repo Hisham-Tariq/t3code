@@ -4,6 +4,7 @@ import type {
   ThreadLinkedPullRequest,
   EnvironmentId,
   MessageId,
+  ModelSelection,
   OrchestrationProjectShell,
   OrchestrationV2ProviderGoal,
   OrchestrationV2RunStatus,
@@ -128,6 +129,8 @@ export interface EnvironmentThreadShell {
   readonly limitRecovery?: import("@t3tools/contracts").OrchestrationV2LimitRecovery | null;
   readonly pinnedAt: string | null;
   readonly autoSettleDisabledAt?: string | null;
+  /** Workers the brain may delegate to; absent when the thread has no roster. */
+  readonly delegates?: ReadonlyArray<ModelSelection>;
   /** Slot in the user-arranged pinned order; null for keyless (legacy) pins. */
   readonly pinOrderKey: string | null;
   /** Slot in the user-arranged active order; null for keyless active threads. */
@@ -274,6 +277,7 @@ export function presentThreadShell(
     limitRecovery: thread.limitRecovery ?? null,
     pinnedAt: nullableIso(thread.pinnedAt ?? null),
     autoSettleDisabledAt: nullableIso(thread.autoSettleDisabledAt ?? null),
+    ...(thread.delegates === undefined ? {} : { delegates: thread.delegates }),
     pinOrderKey: thread.pinOrderKey ?? null,
     activeOrderKey: thread.activeOrderKey ?? null,
     ...(thread.lastVisitedAt === undefined

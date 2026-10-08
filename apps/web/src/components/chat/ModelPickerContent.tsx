@@ -157,6 +157,12 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
   selectedModels?: ReadonlyArray<{ instanceId: ProviderInstanceId; model: string }>;
   onToggleModel?: (instanceId: ProviderInstanceId, model: string) => void;
   /**
+   * The picker only ever builds a set (the worker roster), so every click
+   * toggles and the popup stays open. Without this a multi-select picker
+   * needs Shift-click and closes after each pick.
+   */
+  multiSelectOnly?: boolean;
+  /**
    * When set, the picker is locked to the given driver kind — typically
    * because the user is editing a previously-sent message and can't change
    * which driver served the turn. Multiple instances of the same kind
@@ -618,7 +624,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
       // normalization rules, so pass the driver kind here.
       const resolvedModel = resolveSelectableModel(entry.driverKind, modelSlug, options);
       if (resolvedModel) {
-        if (additive && onToggleModel) {
+        if ((additive || props.multiSelectOnly === true) && onToggleModel) {
           onToggleModel(instanceId, resolvedModel);
         } else {
           onInstanceModelChange(instanceId, resolvedModel);
@@ -631,6 +637,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
       modelOptionsByInstance,
       onInstanceModelChange,
       onToggleModel,
+      props.multiSelectOnly,
     ],
   );
 

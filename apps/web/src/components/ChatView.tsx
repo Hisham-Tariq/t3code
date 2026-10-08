@@ -793,6 +793,16 @@ function pasteTextToFocusComposer(event: ClipboardEvent): string | null {
   return text.length > 0 ? text : null;
 }
 
+const EMPTY_WORKERS: ReadonlyArray<ModelSelection> = [];
+
+/**
+ * The worker roster picked in the composer before the thread exists. Keyed by
+ * route like the fanout draft state, so switching drafts keeps each one's team.
+ */
+const draftWorkersAtom = Atom.family((_routeKey: string) =>
+  Atom.make(EMPTY_WORKERS).pipe(Atom.keepAlive),
+);
+
 const draftFanoutStateAtom = Atom.family((_routeKey: string) =>
   Atom.make({
     selections: null as ReadonlyArray<ModelSelection> | null,
@@ -1610,6 +1620,9 @@ export default function ChatView(props: ChatViewProps) {
   const closeTerminalMutation = useAtomCommand(terminalEnvironment.close, "terminal close");
   const createThread = useOrchestrationCommand(threadEnvironment.create, { reportFailure: false });
   const deleteThread = useOrchestrationCommand(threadEnvironment.delete, { reportFailure: false });
+  const setThreadDelegates = useOrchestrationCommand(threadEnvironment.setDelegates, {
+    reportFailure: false,
+  });
   const updateThreadMetadata = useOrchestrationCommand(threadEnvironment.updateMetadata, {
     reportFailure: false,
   });
@@ -2106,6 +2119,29 @@ export default function ChatView(props: ChatViewProps) {
   );
   const isServerThread = serverThread !== null;
   const activeThread = isServerThread ? serverThread : localDraftThread;
+  const workersAtom = draftWorkersAtom(routeThreadKey);
+  const draftWorkersValue = useAtomValue(workersAtom);
+  // A started thread's roster lives on the thread; a draft's lives in the atom
+  // until the first message carries it into thread creation.
+  const serverThreadWorkers = serverThread?.delegates ?? EMPTY_WORKERS;
+  const workers = isServerThread ? serverThreadWorkers : draftWorkersValue;
+  const onToggleWorker = useCallback(
+    (instanceId: ProviderInstanceId, model: string) => {
+      const toggle = (current: ReadonlyArray<ModelSelection>) =>
+        current.some((entry) => entry.instanceId === instanceId && entry.model === model)
+          ? current.filter((entry) => !(entry.instanceId === instanceId && entry.model === model))
+          : [...current, createModelSelection(instanceId, model)];
+      if (serverThread !== null) {
+        void setThreadDelegates({
+          environmentId,
+          input: { threadId: serverThread.id, delegates: toggle(serverThreadWorkers) },
+        });
+        return;
+      }
+      appAtomRegistry.update(workersAtom, toggle);
+    },
+    [environmentId, serverThread, serverThreadWorkers, setThreadDelegates, workersAtom],
+  );
   const serverLatestRun = useMemo(
     () => (serverProjection === null ? null : deriveLatestThreadRun(serverProjection)),
     [serverProjection],
@@ -9808,6 +9844,7 @@ export default function ChatView(props: ChatViewProps) {
                       interactionMode: sendInteractionMode,
                       branch: activeThreadBranch,
                       worktreePath: activeThread.worktreePath,
+                      ...(workers.length > 0 ? { delegates: workers } : {}),
                       createdAt: activeThread.createdAt,
                     },
                   }
@@ -11497,6 +11534,8 @@ export default function ChatView(props: ChatViewProps) {
                                 true
                               }
                               onMultipleModelSelectionsChange={setMultipleModelSelections}
+                              workers={workers}
+                              onToggleWorker={onToggleWorker}
                               composerRef={composerRef}
                               composerDraftTarget={composerDraftTarget}
                               environmentId={environmentId}
