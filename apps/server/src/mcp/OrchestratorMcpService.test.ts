@@ -38,6 +38,7 @@ import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts
 import * as SecretRequests from "../secrets/SecretRequests.ts";
 import type { McpInvocationScope } from "./McpInvocationContext.ts";
 import { idleThreadProjection, liveThreadShell } from "./McpToolAccess.testkit.ts";
+import * as ProcessRunner from "../processRunner.ts";
 import * as OrchestratorMcpService from "./OrchestratorMcpService.ts";
 
 describe("OrchestratorMcpService", () => {
@@ -168,7 +169,14 @@ describe("OrchestratorMcpService", () => {
         const commandIds = yield* Ref.get(acknowledgementCommandIds);
         assert.equal(commandIds.length, 2);
         assert.notEqual(commandIds[0], commandIds[1]);
-      }).pipe(Effect.provide(OrchestratorMcpService.layer.pipe(Layer.provide(layerDependencies))));
+      }).pipe(
+        Effect.provide(
+          OrchestratorMcpService.layer.pipe(
+            Layer.provide(Layer.mock(ProcessRunner.ProcessRunner)({})),
+            Layer.provide(layerDependencies),
+          ),
+        ),
+      );
     }),
   );
 
@@ -255,7 +263,14 @@ describe("OrchestratorMcpService", () => {
         const settled = yield* service.taskStatus(scope, taskId);
         assert.equal(settled.status, "cancelled");
         assert.equal(yield* Ref.get(dispatched), 1);
-      }).pipe(Effect.provide(OrchestratorMcpService.layer.pipe(Layer.provide(layerDependencies))));
+      }).pipe(
+        Effect.provide(
+          OrchestratorMcpService.layer.pipe(
+            Layer.provide(Layer.mock(ProcessRunner.ProcessRunner)({})),
+            Layer.provide(layerDependencies),
+          ),
+        ),
+      );
     }),
   );
 
@@ -330,7 +345,14 @@ describe("OrchestratorMcpService", () => {
           .pipe(Effect.flip);
         assert.equal(error.code, "task_not_cancellable");
         assert.deepEqual(yield* Ref.get(dispatched), []);
-      }).pipe(Effect.provide(OrchestratorMcpService.layer.pipe(Layer.provide(layerDependencies))));
+      }).pipe(
+        Effect.provide(
+          OrchestratorMcpService.layer.pipe(
+            Layer.provide(Layer.mock(ProcessRunner.ProcessRunner)({})),
+            Layer.provide(layerDependencies),
+          ),
+        ),
+      );
     }),
   );
 
@@ -409,7 +431,14 @@ describe("OrchestratorMcpService", () => {
           (yield* Ref.get(dispatched)).map((command) => (command as { type: string }).type),
           ["thread.stop"],
         );
-      }).pipe(Effect.provide(OrchestratorMcpService.layer.pipe(Layer.provide(layerDependencies))));
+      }).pipe(
+        Effect.provide(
+          OrchestratorMcpService.layer.pipe(
+            Layer.provide(Layer.mock(ProcessRunner.ProcessRunner)({})),
+            Layer.provide(layerDependencies),
+          ),
+        ),
+      );
     }),
   );
 
@@ -494,7 +523,14 @@ describe("OrchestratorMcpService", () => {
           (yield* Ref.get(dispatched)).map((command) => (command as { type: string }).type),
           ["thread.stop", "delegated_task.completion-delivery.dispose"],
         );
-      }).pipe(Effect.provide(OrchestratorMcpService.layer.pipe(Layer.provide(layerDependencies))));
+      }).pipe(
+        Effect.provide(
+          OrchestratorMcpService.layer.pipe(
+            Layer.provide(Layer.mock(ProcessRunner.ProcessRunner)({})),
+            Layer.provide(layerDependencies),
+          ),
+        ),
+      );
     }),
   );
 
@@ -576,7 +612,14 @@ describe("OrchestratorMcpService", () => {
           .pipe(Effect.flip);
         assert.equal(error.code, "runtime_mode_escalation_denied");
         assert.deepEqual(yield* Ref.get(dispatched), []);
-      }).pipe(Effect.provide(OrchestratorMcpService.layer.pipe(Layer.provide(layerDependencies))));
+      }).pipe(
+        Effect.provide(
+          OrchestratorMcpService.layer.pipe(
+            Layer.provide(Layer.mock(ProcessRunner.ProcessRunner)({})),
+            Layer.provide(layerDependencies),
+          ),
+        ),
+      );
     }),
   );
 
@@ -719,7 +762,14 @@ describe("OrchestratorMcpService", () => {
           dispatched: yield* Ref.get(dispatched),
           stoppedBelow: yield* Ref.get(stoppedBelow),
         };
-      }).pipe(Effect.provide(OrchestratorMcpService.layer.pipe(Layer.provide(layerDependencies))));
+      }).pipe(
+        Effect.provide(
+          OrchestratorMcpService.layer.pipe(
+            Layer.provide(Layer.mock(ProcessRunner.ProcessRunner)({})),
+            Layer.provide(layerDependencies),
+          ),
+        ),
+      );
     });
 
   it.effect("refuses to cancel a task when a task under it now runs above the parent's modes", () =>
@@ -824,6 +874,7 @@ describe("OrchestratorMcpService provider resolution", () => {
       readonly model: string;
       readonly options?: ReadonlyArray<{ readonly id: string; readonly value: unknown }>;
     } = { instanceId: codexInstanceId, model: "gpt-5.4" },
+    delegates?: ReadonlyArray<{ readonly instanceId: ProviderInstanceId; readonly model: string }>,
   ): OrchestrationV2ThreadProjection =>
     ({
       thread: {
@@ -835,6 +886,7 @@ describe("OrchestratorMcpService provider resolution", () => {
         modelSelection,
         runtimeMode: "full-access",
         interactionMode: "default",
+        ...(delegates === undefined ? {} : { delegates }),
       },
       runs: [
         {
@@ -1000,7 +1052,12 @@ describe("OrchestratorMcpService provider resolution", () => {
             fork!.constraints.includes("Driver 'forkOnly' is not registered in this build."),
           );
         }).pipe(
-          Effect.provide(OrchestratorMcpService.layer.pipe(Layer.provide(layerDependencies))),
+          Effect.provide(
+            OrchestratorMcpService.layer.pipe(
+              Layer.provide(Layer.mock(ProcessRunner.ProcessRunner)({})),
+              Layer.provide(layerDependencies),
+            ),
+          ),
         );
       }),
   );
@@ -1099,7 +1156,12 @@ describe("OrchestratorMcpService provider resolution", () => {
           assert.equal(request.modelSelection.instanceId, antigravityInstanceId);
           assert.equal(request.modelSelection.model, "ant-model");
         }).pipe(
-          Effect.provide(OrchestratorMcpService.layer.pipe(Layer.provide(layerDependencies))),
+          Effect.provide(
+            OrchestratorMcpService.layer.pipe(
+              Layer.provide(Layer.mock(ProcessRunner.ProcessRunner)({})),
+              Layer.provide(layerDependencies),
+            ),
+          ),
         );
       }),
   );
@@ -1192,7 +1254,73 @@ describe("OrchestratorMcpService provider resolution", () => {
         };
         assert.equal(request.modelSelection.instanceId, antigravityInstanceId);
         assert.equal(request.modelSelection.model, "ant-model");
-      }).pipe(Effect.provide(OrchestratorMcpService.layer.pipe(Layer.provide(layerDependencies))));
+      }).pipe(
+        Effect.provide(
+          OrchestratorMcpService.layer.pipe(
+            Layer.provide(Layer.mock(ProcessRunner.ProcessRunner)({})),
+            Layer.provide(layerDependencies),
+          ),
+        ),
+      );
+    }),
+  );
+
+  it.effect("refuses a worker the user did not pick for this thread", () =>
+    Effect.gen(function* () {
+      const layerDependencies = Layer.mergeAll(
+        NodeServices.layer,
+        Layer.mock(ThreadManagementService.ThreadManagementService)({
+          getThreadRecords: () =>
+            Effect.succeed(
+              parentProjection([], { instanceId: codexInstanceId, model: "gpt-5.4" }, [
+                { instanceId: antigravityInstanceId, model: "ant-model" },
+              ]),
+            ),
+        }),
+        providerRegistryLayer([
+          providerSnapshot({
+            instanceId: codexInstanceId,
+            driver: ProviderDriverKind.make("codex"),
+            model: "gpt-5.4",
+          }),
+          providerSnapshot({
+            instanceId: antigravityInstanceId,
+            driver: ProviderDriverKind.make("antigravity"),
+            model: "ant-model",
+          }),
+        ]),
+        adapterRegistryLayer([codexInstanceId, antigravityInstanceId]),
+        Layer.mock(ProjectService.ProjectService)({}),
+        Layer.mock(SecretRequests.SecretRequests)({}),
+        Layer.mock(ScheduledTaskService.ScheduledTaskService)({}),
+      );
+
+      yield* Effect.gen(function* () {
+        const service = yield* OrchestratorMcpService.OrchestratorMcpService;
+        const error = yield* service
+          .delegateTask(scope, {
+            task: "Summarize the diff.",
+            target: { providerInstanceId: codexInstanceId, model: "gpt-5.4" },
+            mode: "async",
+            clientRequestId: "delegate-outside-roster-1",
+          })
+          .pipe(Effect.flip);
+        assert.equal(error.code, "provider_unavailable");
+        assert.isTrue(error.message.includes(`${antigravityInstanceId} / ant-model`));
+
+        const capabilities = yield* service.capabilities(scope);
+        assert.deepEqual(
+          capabilities.providers.map((provider) => provider.providerInstanceId),
+          [antigravityInstanceId],
+        );
+      }).pipe(
+        Effect.provide(
+          OrchestratorMcpService.layer.pipe(
+            Layer.provide(Layer.mock(ProcessRunner.ProcessRunner)({})),
+            Layer.provide(layerDependencies),
+          ),
+        ),
+      );
     }),
   );
 
@@ -1249,7 +1377,14 @@ describe("OrchestratorMcpService provider resolution", () => {
         assert.isTrue(
           byDriver.message.includes("No V2 provider adapter is registered for driver forkOnly."),
         );
-      }).pipe(Effect.provide(OrchestratorMcpService.layer.pipe(Layer.provide(layerDependencies))));
+      }).pipe(
+        Effect.provide(
+          OrchestratorMcpService.layer.pipe(
+            Layer.provide(Layer.mock(ProcessRunner.ProcessRunner)({})),
+            Layer.provide(layerDependencies),
+          ),
+        ),
+      );
     }),
   );
 
@@ -1351,7 +1486,14 @@ describe("OrchestratorMcpService provider resolution", () => {
         assert.equal(result.providerInstanceId, claudeInstanceId);
         assert.equal(yield* Ref.get(probes), 2);
         assert.equal(yield* Ref.get(dispatched), 1);
-      }).pipe(Effect.provide(OrchestratorMcpService.layer.pipe(Layer.provide(layerDependencies))));
+      }).pipe(
+        Effect.provide(
+          OrchestratorMcpService.layer.pipe(
+            Layer.provide(Layer.mock(ProcessRunner.ProcessRunner)({})),
+            Layer.provide(layerDependencies),
+          ),
+        ),
+      );
     }),
   );
 
@@ -1559,7 +1701,12 @@ describe("OrchestratorMcpService provider resolution", () => {
               assert.equal(request.modelSelection.model, "codex-alt-model", testCase.name);
             }
           }).pipe(
-            Effect.provide(OrchestratorMcpService.layer.pipe(Layer.provide(layerDependencies))),
+            Effect.provide(
+              OrchestratorMcpService.layer.pipe(
+                Layer.provide(Layer.mock(ProcessRunner.ProcessRunner)({})),
+                Layer.provide(layerDependencies),
+              ),
+            ),
           );
         }
       }),
@@ -1617,6 +1764,7 @@ describe("OrchestratorMcpService provider resolution", () => {
         Layer.provide(
           Layer.mergeAll(
             NodeServices.layer,
+            Layer.mock(ProcessRunner.ProcessRunner)({}),
             Layer.mock(ThreadManagementService.ThreadManagementService)({
               getThreadShell: (threadId) =>
                 Effect.succeed(threadId === boundThreadId ? boundThread : null),
@@ -1684,6 +1832,7 @@ describe("OrchestratorMcpService provider resolution", () => {
               Layer.provide(
                 Layer.mergeAll(
                   NodeServices.layer,
+                  Layer.mock(ProcessRunner.ProcessRunner)({}),
                   Layer.mock(ThreadManagementService.ThreadManagementService)({
                     getThreadShell: () => Effect.succeed(null),
                     // Its turn ended: no run is active.
@@ -1766,6 +1915,7 @@ describe("OrchestratorMcpService provider resolution", () => {
               Layer.provide(
                 Layer.mergeAll(
                   NodeServices.layer,
+                  Layer.mock(ProcessRunner.ProcessRunner)({}),
                   Layer.mock(ThreadManagementService.ThreadManagementService)({
                     getThreadShell: (threadId) =>
                       Ref.getAndUpdate(lookups, (count) => count + 1).pipe(

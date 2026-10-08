@@ -171,6 +171,9 @@ export function summarizeT3ToolCalls(
     case "task-status":
       label = phrase("Checked", "check", `task status ${times}`);
       break;
+    case "verify":
+      label = phrase("Ran", "run", `the project checks ${times}`);
+      break;
     case "task-cancel":
       label = phrase(
         "Requested cancellation of",

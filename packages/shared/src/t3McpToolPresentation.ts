@@ -9,6 +9,7 @@ export type T3McpToolSummaryAction =
   | "capabilities"
   | "delegate"
   | "task-status"
+  | "verify"
   | "task-cancel"
   | "schedule-run"
   | "schedule-create"
@@ -114,6 +115,7 @@ const T3_MCP_TOOLS: Readonly<Record<string, T3McpToolDefinition>> = {
   ),
   delegate_task: tool(["Delegate", "Delegating", "Delegated", "a child task"], "delegate"),
   task_status: tool(["Get", "Getting", "Got", "delegated task status"], "task-status"),
+  delegate_verify: tool(["Run", "Running", "Ran", "the project checks"], "verify"),
   task_cancel: tool(
     ["Cancel", "Canceling", "Requested cancellation of", "delegated task"],
     "task-cancel",

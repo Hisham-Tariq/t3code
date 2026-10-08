@@ -1,3 +1,4 @@
+import * as ProcessRunner from "../processRunner.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { describe, expect, it } from "@effect/vitest";
 import { AjvJsonSchemaValidator } from "@modelcontextprotocol/sdk/validation/ajv";
@@ -698,6 +699,7 @@ describe("orchestrator MCP toolkit", () => {
                 Layer.provide(layerOrchestration),
               ),
             ),
+            Layer.provide(Layer.mock(ProcessRunner.ProcessRunner)({})),
             Layer.provide(NodeServices.layer),
           );
 
@@ -3824,6 +3826,7 @@ describe("orchestrator MCP toolkit", () => {
               Layer.provide(layerOrchestration),
             ),
           ),
+          Layer.provide(Layer.mock(ProcessRunner.ProcessRunner)({})),
           Layer.provide(NodeServices.layer),
         );
 

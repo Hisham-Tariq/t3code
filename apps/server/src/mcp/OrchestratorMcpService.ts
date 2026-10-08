@@ -18,6 +18,8 @@ import {
   type OrchestratorMcpCreatedThread,
   type OrchestratorMcpDelegateTaskInput,
   type OrchestratorMcpDelegateTaskResult,
+  type OrchestratorMcpVerifyInput,
+  type OrchestratorMcpVerifyResult,
   type OrchestratorMcpInteractionMode,
   type OrchestratorMcpDeleteScheduledTaskInput,
   type OrchestratorMcpRequestSecretInput,
@@ -85,6 +87,9 @@ import { isSnoozed } from "../orchestration-v2/ThreadSettlementService.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
 import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts";
+import { teamBrief } from "./teamBrief.ts";
+import { resolveVerifyScript } from "./verifyScript.ts";
+import * as ProcessRunner from "../processRunner.ts";
 import {
   clientRuntimeModeCeiling,
   type McpInvocationScope,
@@ -128,6 +133,10 @@ export interface OrchestratorMcpServiceShape {
     scope: McpInvocationScope,
     input: OrchestratorMcpDelegateTaskInput,
   ) => Effect.Effect<OrchestratorMcpDelegateTaskResult, OrchestratorMcpFailure>;
+  readonly verify: (
+    scope: McpInvocationScope,
+    input: OrchestratorMcpVerifyInput,
+  ) => Effect.Effect<OrchestratorMcpVerifyResult, OrchestratorMcpFailure>;
   readonly taskStatus: (
     scope: McpInvocationScope,
     taskId: NodeId,
@@ -828,6 +837,10 @@ function timelineItem(input: {
   };
 }
 
+/** A build can legitimately run for minutes; past this it is hung, not slow. */
+const VERIFY_TIMEOUT = Duration.minutes(10);
+const VERIFY_OUTPUT_CHARS = 6000;
+
 const make = Effect.gen(function* () {
   const crypto = yield* Crypto.Crypto;
   const threadManagement = yield* ThreadManagementService.ThreadManagementService;
@@ -835,6 +848,7 @@ const make = Effect.gen(function* () {
   const providerAdapters = yield* ProviderAdapterRegistry.ProviderAdapterRegistryV2;
   const scheduledTasks = yield* ScheduledTaskService.ScheduledTaskService;
   const projects = yield* ProjectService.ProjectService;
+  const processRunner = yield* ProcessRunner.ProcessRunner;
 
   /** A caller-named project, which must exist before anything is recorded against it. */
   const requireProject = (projectId: ProjectId) =>
@@ -1190,6 +1204,21 @@ const make = Effect.gen(function* () {
             `Model ${model} on provider ${instanceId} rejected options: ${invalid.join(" ")}`,
           );
         }
+      }
+
+      // The user picked this thread's workers; a brain that reaches past them
+      // would spend an account or model nobody approved.
+      const roster = input.parent.thread.delegates ?? [];
+      if (
+        roster.length > 0 &&
+        !roster.some((seat) => seat.instanceId === instanceId && seat.model === model)
+      ) {
+        return yield* failure(
+          "provider_unavailable",
+          `${instanceId} / ${model} is not one of this thread's workers. Choose one of: ${roster
+            .map((seat) => `${seat.instanceId} / ${seat.model}`)
+            .join(", ")}.`,
+        );
       }
 
       return {
@@ -1772,34 +1801,52 @@ const make = Effect.gen(function* () {
         const { parent, limits } = yield* loadCaller(scope);
         const providers = yield* loadProviders;
         const orchestrationCapableInstanceIds = yield* loadOrchestrationCapableInstanceIds();
+        const roster = parent?.thread.delegates ?? [];
+        const team = teamBrief(roster);
         return {
+          ...(team === undefined ? {} : { team }),
           parentThreadId: parent?.thread.id ?? null,
           inheritedProviderInstanceId: parent?.thread.modelSelection.instanceId ?? null,
           inheritedModel: parent?.thread.modelSelection.model ?? null,
           runtimeMode: limits.runtimeMode,
           interactionMode: limits.interactionMode,
-          providers: providers.map((provider) => {
-            const constraints = providerConstraints(
-              provider,
-              orchestrationCapableInstanceIds.has(provider.instanceId),
-            );
-            return {
-              providerInstanceId: provider.instanceId,
-              driverKind: provider.driver,
-              displayName: provider?.displayName ?? null,
-              models:
-                provider?.models.map((model) => ({
-                  id: model.slug,
-                  label: model.name ?? null,
-                  ...(model.capabilities?.optionDescriptors === undefined
-                    ? {}
-                    : { options: model.capabilities.optionDescriptors }),
-                })) ?? [],
-              canRunChildTask: constraints.length === 0,
-              canRunCrossProviderChildTask: constraints.length === 0,
-              constraints: [...constraints],
-            };
-          }),
+          providers: providers
+            .filter(
+              (provider) =>
+                roster.length === 0 ||
+                roster.some((seat) => seat.instanceId === provider.instanceId),
+            )
+            .map((provider) => {
+              const constraints = providerConstraints(
+                provider,
+                orchestrationCapableInstanceIds.has(provider.instanceId),
+              );
+              return {
+                providerInstanceId: provider.instanceId,
+                driverKind: provider.driver,
+                displayName: provider?.displayName ?? null,
+                models:
+                  provider?.models
+                    .filter(
+                      (model) =>
+                        roster.length === 0 ||
+                        roster.some(
+                          (seat) =>
+                            seat.instanceId === provider.instanceId && seat.model === model.slug,
+                        ),
+                    )
+                    .map((model) => ({
+                      id: model.slug,
+                      label: model.name ?? null,
+                      ...(model.capabilities?.optionDescriptors === undefined
+                        ? {}
+                        : { options: model.capabilities.optionDescriptors }),
+                    })) ?? [],
+                canRunChildTask: constraints.length === 0,
+                canRunCrossProviderChildTask: constraints.length === 0,
+                constraints: [...constraints],
+              };
+            }),
           features: {
             appOwnedSubagents: true,
             asyncPolling: true,
@@ -1935,6 +1982,55 @@ const make = Effect.gen(function* () {
             ),
           );
         return yield* readTask(scope, taskId, true, true);
+      }),
+    verify: (callerScope, input) =>
+      Effect.gen(function* () {
+        const { parent } = yield* loadThreadCaller(callerScope, "delegate_verify");
+        const project = yield* requireProject(parent.thread.projectId);
+        const script = resolveVerifyScript(project.scripts, input.script);
+        if (script === undefined) {
+          return yield* failure(
+            "invalid_request",
+            project.scripts.length === 0
+              ? "This project has no scripts, so there is nothing to verify with. Ask the user to add one named verify, check, test or build in Project settings > Scripts, and review the workers' files by reading them instead."
+              : `No script named verify, check, test or build. This project has: ${project.scripts
+                  .map((entry) => entry.name)
+                  .join(", ")}. Pass one of those as \`script\`.`,
+          );
+        }
+        // Workers share this thread's checkout, so the check runs where their files are.
+        const cwd = parent.thread.worktreePath ?? project.workspaceRoot;
+        const startedAt = yield* DateTime.now;
+        const shell =
+          process.platform === "win32"
+            ? { command: "cmd.exe", args: ["/d", "/s", "/c", script.command] }
+            : { command: "/bin/sh", args: ["-lc", script.command] };
+        const result = yield* processRunner
+          .run({
+            ...shell,
+            cwd,
+            timeout: VERIFY_TIMEOUT,
+            timeoutBehavior: "timedOutResult",
+            outputMode: "truncate",
+          })
+          .pipe(
+            Effect.mapError((error) =>
+              failure(
+                "orchestration_error",
+                `Unable to run ${script.name}: ${errorMessage(error)}`,
+              ),
+            ),
+          );
+        const finishedAt = yield* DateTime.now;
+        return {
+          script: script.name,
+          command: script.command,
+          passed: result.code === 0 && !result.timedOut,
+          exitCode: typeof result.code === "number" ? Number(result.code) : null,
+          timedOut: result.timedOut,
+          durationMs: DateTime.toEpochMillis(finishedAt) - DateTime.toEpochMillis(startedAt),
+          output: `${result.stdout}\n${result.stderr}`.trim().slice(-VERIFY_OUTPUT_CHARS),
+        };
       }),
     taskStatus: (callerScope, taskId) =>
       Effect.gen(function* () {
@@ -2499,5 +2595,6 @@ export const layer: Layer.Layer<
   | ProviderAdapterRegistry.ProviderAdapterRegistryV2
   | ScheduledTaskService.ScheduledTaskService
   | ProjectService.ProjectService
+  | ProcessRunner.ProcessRunner
   | SecretRequests.SecretRequests
 > = Layer.effect(OrchestratorMcpService, make);

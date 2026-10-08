@@ -218,6 +218,28 @@ export const OrchestratorMcpTaskStatusInput = Schema.Struct({
 });
 export type OrchestratorMcpTaskStatusInput = typeof OrchestratorMcpTaskStatusInput.Type;
 
+export const OrchestratorMcpVerifyInput = Schema.Struct({
+  script: Schema.optional(
+    Schema.String.annotate({
+      description:
+        "Name of a project script to run. Defaults to the first of verify, check, test or build.",
+    }),
+  ),
+});
+export type OrchestratorMcpVerifyInput = typeof OrchestratorMcpVerifyInput.Type;
+
+export const OrchestratorMcpVerifyResult = Schema.Struct({
+  script: Schema.String,
+  command: Schema.String,
+  passed: Schema.Boolean,
+  exitCode: Schema.NullOr(Schema.Number),
+  timedOut: Schema.Boolean,
+  durationMs: Schema.Number,
+  /** The tail of the combined output: the failure is at the end, build chatter at the start. */
+  output: Schema.String,
+});
+export type OrchestratorMcpVerifyResult = typeof OrchestratorMcpVerifyResult.Type;
+
 export const OrchestratorMcpTaskCancelInput = Schema.Struct({
   taskId: NodeId,
   reason: Schema.optional(Schema.String.check(Schema.isMaxLength(2_000))),
@@ -500,6 +522,8 @@ export const OrchestratorMcpCapabilitiesResult = Schema.Struct({
   runtimeMode: RuntimeMode,
   interactionMode: ProviderInteractionMode,
   providers: Schema.Array(OrchestratorMcpProviderCapability),
+  /** How to lead the workers the user picked for this thread; absent when it has none. */
+  team: Schema.optional(Schema.String),
   features: Schema.Struct({
     appOwnedSubagents: Schema.Boolean,
     asyncPolling: Schema.Boolean,

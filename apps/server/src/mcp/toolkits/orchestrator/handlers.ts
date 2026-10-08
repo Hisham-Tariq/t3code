@@ -28,6 +28,13 @@ const handlers = {
       return yield* service.taskStatus(scope, taskId);
     }),
   ),
+  delegate_verify: McpToolAccess.writesEnvironment((input) =>
+    Effect.gen(function* () {
+      const scope = yield* McpInvocationContext.McpInvocationContext;
+      const service = yield* OrchestratorMcpService.OrchestratorMcpService;
+      return yield* service.verify(scope, input);
+    }),
+  ),
   task_cancel: McpToolAccess.actsAsCaller((input) =>
     Effect.gen(function* () {
       const scope = yield* McpInvocationContext.McpInvocationContext;

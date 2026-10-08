@@ -407,6 +407,8 @@ export const OrchestrationV2AppThread = Schema.Struct({
   limitRecovery: Schema.optional(Schema.NullOr(OrchestrationV2LimitRecovery)),
   pinnedAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
   autoSettleDisabledAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
+  /** Workers the user chose for this thread; delegation is limited to them. Empty or absent means no limit. */
+  delegates: Schema.optional(Schema.Array(ModelSelection)),
   // Fractional-index slot in the user-arranged pinned order. Optional so
   // payloads from pre-reorder servers still decode.
   pinOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
@@ -1658,6 +1660,7 @@ export const OrchestrationV2DomainEvent = Schema.Union([
       "thread.unsnoozed",
       "thread.pinned",
       "thread.auto-settle-set",
+      "thread.delegates-set",
       "thread.unpinned",
       "thread.pin-reordered",
       "thread.active-reordered",
@@ -2477,6 +2480,7 @@ export const OrchestrationV2DomainEventJson = Schema.Union([
       "thread.unsnoozed",
       "thread.pinned",
       "thread.auto-settle-set",
+      "thread.delegates-set",
       "thread.unpinned",
       "thread.pin-reordered",
       "thread.active-reordered",
@@ -2619,6 +2623,7 @@ export const OrchestrationV2Command = Schema.Union([
     interactionMode: ProviderInteractionMode,
     branch: Schema.NullOr(TrimmedNonEmptyString),
     worktreePath: Schema.NullOr(TrimmedNonEmptyString),
+    delegates: Schema.optional(Schema.Array(ModelSelection)),
     importedNativeThread: Schema.optional(
       Schema.Struct({
         ref: Schema.Struct({
@@ -2687,6 +2692,12 @@ export const OrchestrationV2Command = Schema.Union([
     commandId: CommandId,
     threadId: ThreadId,
     enabled: Schema.Boolean,
+  }),
+  Schema.Struct({
+    type: Schema.Literal("thread.delegates.set"),
+    commandId: CommandId,
+    threadId: ThreadId,
+    delegates: Schema.Array(ModelSelection),
   }),
   Schema.Struct({
     type: Schema.Literal("thread.pin"),

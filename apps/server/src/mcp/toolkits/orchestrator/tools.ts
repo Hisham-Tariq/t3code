@@ -17,6 +17,8 @@ import {
   OrchestratorMcpTaskCancelResult,
   OrchestratorMcpUpdateScheduledTaskInput,
   OrchestratorMcpTaskStatusInput,
+  OrchestratorMcpVerifyInput,
+  OrchestratorMcpVerifyResult,
   OrchestratorMcpThreadInterruptInput,
   OrchestratorMcpThreadInterruptResult,
   OrchestratorMcpThreadListInput,
@@ -84,6 +86,20 @@ const TaskStatusTool = Tool.make("task_status", {
   dependencies,
 })
   .annotate(Tool.Title, "Get delegated task status")
+  .annotate(Tool.Readonly, false)
+  .annotate(Tool.Destructive, false)
+  .annotate(Tool.Idempotent, true);
+
+const DelegateVerifyTool = Tool.make("delegate_verify", {
+  description:
+    "Needs an agent running inside a T3 thread with full access. Run this project's own verify, check, test or build script (from Project settings > Scripts) in this thread's checkout and report whether it passed, with the end of its output. Run it before telling the user work is finished: a worker's summary is not evidence. When it fails, send the output to that worker so it fixes its own work. With no matching script it says so; read the files instead and do not claim a pass.",
+  parameters: OrchestratorMcpVerifyInput,
+  success: OrchestratorMcpVerifyResult,
+  failure: OrchestratorMcpFailure,
+  failureMode: "return",
+  dependencies,
+})
+  .annotate(Tool.Title, "Verify the project")
   .annotate(Tool.Readonly, false)
   .annotate(Tool.Destructive, false)
   .annotate(Tool.Idempotent, true);
@@ -260,6 +276,7 @@ export const OrchestratorToolkit = Toolkit.make(
   OrchestratorCapabilitiesTool,
   DelegateTaskTool,
   TaskStatusTool,
+  DelegateVerifyTool,
   TaskCancelTool,
   ScheduleTaskTool,
   ListScheduledTasksTool,

@@ -685,6 +685,8 @@ const layerMakeRoutes = Layer.mergeAll(
   McpHttpServer.layer.pipe(
     Layer.provide(ProviderAdapterRegistry.layerFromProviderInstanceRegistry),
     Layer.provide(McpOAuth.layerMcpClientAuthenticator),
+    // delegate_verify runs the project's own scripts.
+    Layer.provide(ProcessRunner.layer),
   ),
 ).pipe(
   // Both transports consume the same service instance, so caches single-flight across clients
