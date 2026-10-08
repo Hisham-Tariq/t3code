@@ -26,6 +26,7 @@ import * as GitWorkflowService from "../git/GitWorkflowService.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import * as ProviderAuthService from "../provider/ProviderAuthService.ts";
 import * as EventSink from "./EventSink.ts";
+import { teamBrief } from "../mcp/teamBrief.ts";
 import * as ContextHandoffService from "./ContextHandoffService.ts";
 import {
   DEFAULT_HANDOFF_TOKEN_CAP,
@@ -1171,7 +1172,14 @@ export const layer: Layer.Layer<
           });
           if (!(yield* isCurrentAttemptInStatus("running"))) return;
           const start = compact ? session.compactThread! : session.startTurn;
-          const context = [delivery.context, restartNote]
+          const context = [
+            // Native slash commands and compaction must stay at the start of the prompt.
+            compact || userText.trimStart().startsWith("/")
+              ? ""
+              : (teamBrief(turnInput.appThread.delegates ?? []) ?? ""),
+            delivery.context,
+            restartNote,
+          ]
             .filter((part) => part !== "")
             .join("\n\n");
           // A note continuation has no turn to resume; its text is the prompt.

@@ -87,7 +87,6 @@ import { isSnoozed } from "../orchestration-v2/ThreadSettlementService.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
 import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts";
-import { teamBrief } from "./teamBrief.ts";
 import { resolveVerifyScript } from "./verifyScript.ts";
 import * as ProcessRunner from "../processRunner.ts";
 import {
@@ -1802,9 +1801,7 @@ const make = Effect.gen(function* () {
         const providers = yield* loadProviders;
         const orchestrationCapableInstanceIds = yield* loadOrchestrationCapableInstanceIds();
         const roster = parent?.thread.delegates ?? [];
-        const team = teamBrief(roster);
         return {
-          ...(team === undefined ? {} : { team }),
           parentThreadId: parent?.thread.id ?? null,
           inheritedProviderInstanceId: parent?.thread.modelSelection.instanceId ?? null,
           inheritedModel: parent?.thread.modelSelection.model ?? null,
