@@ -105,6 +105,7 @@ import { EMPTY_SERVER_PROVIDERS } from "../../state/server";
 import { useArchivedThreadSnapshots } from "../../lib/archivedThreadsState";
 import { formatRelativeTimeLabel } from "../../timestampFormat";
 import { Button } from "../ui/button";
+import { ImportChatsDialog } from "./ImportChatsDialog";
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "../ui/collapsible";
 import {
   Dialog,
@@ -2173,6 +2174,7 @@ function LegacyFeaturesSection() {
 }
 
 export function GeneralSettingsPanel() {
+  const [importChatsOpen, setImportChatsOpen] = useState(false);
   const modifierLabel = isMacPlatform(navigator.platform) ? "⌘" : "Ctrl";
   const sendShortcutOptions = [
     { value: "enter", label: "Enter" },
@@ -2369,6 +2371,16 @@ export function GeneralSettingsPanel() {
               }
               aria-label="Snooze limited threads"
             />
+          }
+        />
+
+        <SettingsRow
+          {...searchableSetting("import-chats")}
+          description="Bring in Claude Code and Codex conversations from this computer, including folders with a single chat."
+          control={
+            <Button size="sm" variant="outline" onClick={() => setImportChatsOpen(true)}>
+              Import chats…
+            </Button>
           }
         />
 
@@ -3401,6 +3413,7 @@ export function GeneralSettingsPanel() {
       </SettingsSection>
 
       <LegacyFeaturesSection />
+      <ImportChatsDialog open={importChatsOpen} onOpenChange={setImportChatsOpen} />
     </SettingsPageContainer>
   );
 }

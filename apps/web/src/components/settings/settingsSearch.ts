@@ -309,6 +309,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["usage quota rate limit reset recover continue"],
   },
   {
+    id: "import-chats",
+    title: "Import chats",
+    to: "/settings/general",
+    searchTerms: ["claude code codex conversation history sessions bring in migrate project"],
+  },
+  {
     id: "working-shelf",
     title: "Working section (beta)",
     to: "/settings/general",
