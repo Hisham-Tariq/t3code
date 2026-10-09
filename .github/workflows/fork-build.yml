@@ -1,0 +1,130 @@
+name: Fork build
+
+# Unsigned Windows and Linux desktop apps, their server archives, and a
+# sideloadable Android APK for this fork. Run it by hand from the Actions tab;
+# everything lands as downloadable run artifacts. It reuses release-desktop.yml
+# for the desktop packaging, minus the upstream release, relay and signing parts.
+
+on:
+  workflow_dispatch:
+  # A manual run needs the workflow on the default branch; this starts one from the branch instead.
+  push:
+    branches: [delegation-v2]
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  bundle:
+    name: Build JS bundle
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          sparse-checkout: |
+            /*
+            !/.repos/
+          sparse-checkout-cone-mode: false
+      - uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version-file: package.json
+          cache: true
+          run-install: false
+      - run: vp install --filter=t3... --filter=@t3tools/web... --filter=@t3tools/desktop... --filter=@t3tools/scripts...
+      - uses: ./.github/actions/setup-apt-mirrors
+      - run: sudo apt-get update && sudo apt-get install -y libsecret-1-dev pkg-config
+      - run: vp run build:desktop
+      - uses: actions/upload-artifact@v7
+        with:
+          name: js-bundle
+          path: |
+            apps/server/dist
+            apps/desktop/dist-electron
+          if-no-files-found: error
+          retention-days: 1
+
+  linux_x64:
+    name: Desktop Linux x64
+    needs: bundle
+    uses: ./.github/workflows/release-desktop.yml
+    with:
+      version: 0.0.45
+      ref: ${{ github.sha }}
+      release_channel: latest
+      relay_client_tracing: false
+      clerk_publishable_key: ""
+      clerk_jwt_template: ""
+      clerk_cli_oauth_client_id: ""
+      relay_url: ""
+      label: Linux x64
+      runner: ubuntu-latest
+      platform: linux
+      target: AppImage
+      arch: x64
+      rust_target: x86_64-unknown-linux-gnu
+      resource_key: linux-x64
+      cli_archive: true
+
+  win_x64:
+    name: Desktop Windows x64
+    needs: bundle
+    uses: ./.github/workflows/release-desktop.yml
+    with:
+      version: 0.0.45
+      ref: ${{ github.sha }}
+      release_channel: latest
+      relay_client_tracing: false
+      clerk_publishable_key: ""
+      clerk_jwt_template: ""
+      clerk_cli_oauth_client_id: ""
+      relay_url: ""
+      label: Windows x64
+      runner: windows-latest
+      platform: win
+      target: nsis
+      arch: x64
+      rust_target: x86_64-pc-windows-msvc
+      resource_key: win32-x64
+      cli_archive: true
+
+  android:
+    name: Android APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      # preview installs next to the store app instead of replacing it.
+      APP_VARIANT: preview
+      EXPO_NO_GIT_STATUS: "1"
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          sparse-checkout: |
+            /*
+            !/.repos/
+          sparse-checkout-cone-mode: false
+      - uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version-file: package.json
+          cache: true
+          run-install: false
+      - run: vp install --filter=@t3tools/mobile...
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Generate Android project
+        working-directory: apps/mobile
+        run: ../../node_modules/.bin/expo prebuild --clean --platform android
+      # The generated project signs release builds with the debug keystore,
+      # which is enough to sideload.
+      - name: Build release APK
+        working-directory: apps/mobile/android
+        run: ./gradlew assembleRelease -x lint -PreactNativeArchitectures=arm64-v8a
+      - uses: actions/upload-artifact@v7
+        with:
+          name: t3-code-android-apk
+          path: apps/mobile/android/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
