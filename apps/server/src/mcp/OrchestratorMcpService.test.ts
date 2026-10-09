@@ -886,6 +886,7 @@ describe("OrchestratorMcpService provider resolution", () => {
         modelSelection,
         runtimeMode: "full-access",
         interactionMode: "default",
+        lineage: { parentThreadId: null, relationshipToParent: null, rootThreadId: parentThreadId },
         ...(delegates === undefined ? {} : { delegates }),
       },
       runs: [
@@ -1321,6 +1322,72 @@ describe("OrchestratorMcpService provider resolution", () => {
           ),
         ),
       );
+    }),
+  );
+
+  it.effect("does not let a worker on a team delegate further", () =>
+    Effect.gen(function* () {
+      const brainThreadId = ThreadId.make("thread:brain");
+      const base = parentProjection([]);
+      const worker = {
+        ...base,
+        thread: {
+          ...base.thread,
+          lineage: {
+            parentThreadId: brainThreadId,
+            relationshipToParent: "subagent",
+            rootThreadId: brainThreadId,
+          },
+        },
+      } as unknown as OrchestrationV2ThreadProjection;
+      const layerFor = (rootDelegates: ReadonlyArray<unknown> | undefined) =>
+        OrchestratorMcpService.layer.pipe(
+          Layer.provide(Layer.mock(ProcessRunner.ProcessRunner)({})),
+          Layer.provide(
+            Layer.mergeAll(
+              NodeServices.layer,
+              Layer.mock(ThreadManagementService.ThreadManagementService)({
+                getThreadRecords: () => Effect.succeed(worker),
+                // Past the team check a delegation reaches dispatch; fail it cleanly.
+                dispatch: () => Effect.fail("dispatch reached" as never),
+                getThreadShell: () =>
+                  Effect.succeed({
+                    ...(rootDelegates === undefined ? {} : { delegates: rootDelegates }),
+                  } as never),
+              }),
+              providerRegistryLayer([
+                providerSnapshot({
+                  instanceId: codexInstanceId,
+                  driver: ProviderDriverKind.make("codex"),
+                  model: "gpt-5.4",
+                }),
+              ]),
+              adapterRegistryLayer([codexInstanceId]),
+              Layer.mock(ProjectService.ProjectService)({}),
+              Layer.mock(SecretRequests.SecretRequests)({}),
+              Layer.mock(ScheduledTaskService.ScheduledTaskService)({}),
+            ),
+          ),
+        );
+      const attempt = Effect.gen(function* () {
+        const service = yield* OrchestratorMcpService.OrchestratorMcpService;
+        return yield* service
+          .delegateTask(scope, {
+            task: "Go deeper.",
+            mode: "async",
+            clientRequestId: "delegate-from-worker-1",
+          })
+          .pipe(Effect.flip);
+      });
+
+      const onTeam = yield* attempt.pipe(
+        Effect.provide(layerFor([{ instanceId: codexInstanceId, model: "gpt-5.4" }])),
+      );
+      assert.equal(onTeam.code, "capability_denied");
+
+      // Outside a team the platform's own nesting is untouched.
+      const offTeam = yield* attempt.pipe(Effect.provide(layerFor(undefined)));
+      assert.equal(offTeam.code, "orchestration_error");
     }),
   );
 

@@ -1859,6 +1859,22 @@ const make = Effect.gen(function* () {
     delegateTask: (callerScope, input) =>
       Effect.gen(function* () {
         const { scope, parent } = yield* loadThreadCaller(callerScope, "delegate_task");
+        // On a team only the brain delegates. A worker holds the same tools, and
+        // left alone it hands its task to more workers, each of which does the
+        // same: one question once became two thousand threads across the user's
+        // accounts.
+        const lineage = parent.thread.lineage;
+        if (lineage.relationshipToParent === "subagent") {
+          const root = yield* threadManagement
+            .getThreadShell(lineage.rootThreadId)
+            .pipe(Effect.orElseSucceed(() => null));
+          if ((root?.delegates ?? []).length > 0) {
+            return yield* failure(
+              "capability_denied",
+              "You are a worker on a team. Do this task yourself and report what you found; only the brain delegates.",
+            );
+          }
+        }
         const parentRun = parent.runs
           .filter(ThreadManagementService.isActiveRun)
           .toSorted((left, right) => right.ordinal - left.ordinal)[0];
